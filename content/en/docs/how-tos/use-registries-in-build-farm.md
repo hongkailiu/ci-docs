@@ -267,6 +267,36 @@ The `my-component` image can be pulled from the authoritative registry with:
 $ podman pull registry.ci.openshift.org/my-organization/my-component:latest
 ```
 
+## The CI Image Repository in quay.io: QCI
+In addtion to the integrated image registry on `app.ci`, all [`promoted`](/docs/architecture/ci-operator/#publishing-container-images)
+images are pushed by `ci-operator`
+to the image registry `quay.io/openshift/ci`, called _QCI_ for short. To be more precise, the promoted image stream tag `<namespace>/<name>:<tag>`
+can be pull with `quay.io/openshift/ci:<namespace>_<name>_<tag>` as the images in different namespaces on `app.ci` are converged into a single one on `quay.io`. As a result, the promoted images are accessible to each user that has the pull permission on QCI, regardless of the namespace of the tag defined in the `ci-operator`'s configuration.
+
+We are in the process of migrating the authoritative, central CI registry from `app.ci` to `quay.io` for the sake of stability and features of the image registry.
+The clients of CI images should start to use QCI because promoting images to `app.ci` will be diabled when the migration is complete.
+
+### Access TO QCI
+The access to the images in QCI is delegated with the [RBACs](/docs/how-tos/rbac/) on `app.ci`.
+This is to reduce the effort on managing users in different places.
+Only pull permission to QCI will be granted.
+
+#### Human user
+Create a pull request to include a Rover group that you belong to in the list of subjects defined in the rolebinding `qci-image-puller` in [the release repo](clusters/app.ci/assets/admin_qci-image-puller_rbac.yaml). The change will be applied to `app.ci` after merging.
+
+Provided that `oc` has logged into `app.ci`, we may pull images from QCI such as `quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest`
+by the following commands:
+
+```console
+$ podman login -u=$(oc --context app.ci whoami) -p=$(oc --context app.ci whoami -t) quay-proxy.ci.openshift.org --authfile /tmp/t.c
+$ podman pull quay-proxy.ci.openshift.org/openshift/ci:ci_ci-operator_latest --authfile /tmp/t.c --platform linux/amd64
+```
+
+#### Token For Programmatic Access to QCI
+With the `admin_manifest.yaml` [described above](/docs/how-tos/use-registries-in-build-farm/#how-do-i-get-a-token-for-programmatic-access-to-the-central-ci-registry), the members of group `my-project-admins`
+can [decide to get the token for the service account](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#manually-create-an-api-token-for-a-serviceaccount) `image-puller`. Once `oc` logged in with the service account token,
+we may use the same commmands above to pull the images.
+
 ## Why I am getting an authentication error?
 
 An authentication error may occur both in the case where you have not yet logged in to a registry and in the case where
